@@ -71,7 +71,6 @@ dependencies:
   - ld_impl_linux-64=2.36.1=hea4e1c9_2
   - lerc=2.2.1=h9c3ff4c_0
   - libarchive=3.5.2=hccf745f_0
-  - libcurl=7.79.0=h2574ce0_0
   - libdeflate=1.7=h7f98852_5
   - libedit=3.1.20191231=he28a2e2_2
   - libev=4.33=h516909a_1
@@ -178,4 +177,5 @@ dependencies:
     - numpy==1.19.5
     - pillow-simd==7.0.0.post3
     - pyturbojpeg==1.1.2
+    - libcurl=7.79.0=h2574ce0_0
 prefix: /n/home02/alvarez/.conda/envs/pytorch_v17

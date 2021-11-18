@@ -7,8 +7,30 @@ from torchvision import transforms
 
 from .alexnet_gn import *
 from .resnet import *
-
+print('loaded')
 url_root = "https://visionlab-pretrainedmodels.s3.amazonaws.com"
+
+"""Vlad nonsense starts here"""
+import torch.utils.model_zoo
+from .cornet_z import CORnet_Z
+from .cornet_z import HASH as HASH_Z
+
+def get_model(model_letter, pretrained=False, map_location=None, **kwargs):
+    model_letter = model_letter.upper()
+    model_hash = globals()[f'HASH_{model_letter}']
+    model = globals()[f'CORnet_{model_letter}'](**kwargs)
+    model = torch.nn.DataParallel(model)
+    if pretrained:
+        url = f'https://s3.amazonaws.com/cornet-models/cornet_{model_letter.lower()}-{model_hash}.pth'
+        ckpt_data = torch.utils.model_zoo.load_url(url, map_location=map_location)
+        model.load_state_dict(ckpt_data['state_dict'])
+    return model
+
+
+def cornet_z(pretrained=False, map_location=None):
+    return get_model('z', pretrained=pretrained, map_location=map_location)
+
+"""Vlad nonsesne ends here"""
 
 def build_alexnet_model(weights_url, config):
     
