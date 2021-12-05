@@ -57,6 +57,10 @@ from dataloaders.transforms import (
 from dataloaders.utils import open_image, open_image_array
 from dataloaders.dataloader import FastLoader
 
+#vlad additions
+from torch.nn.parallel import DistributedDataParallel as DDP
+from glob import glob
+
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -149,7 +153,8 @@ parser.add_argument('--ipcl-n', default=5, type=int,
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
 
-print('vlad loaded everything')
+
+
 class AlbumTransforms(object):
     def __init__(self, transform):
         self.transform = transform
@@ -229,6 +234,8 @@ def get_transforms_custom(image_size=256, crop_size=224, n_samples=5, device=Non
 
 def main():
     args = parser.parse_args()
+    
+    
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -247,9 +254,11 @@ def main():
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
+    print(args.world_size, )
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
     ngpus_per_node = torch.cuda.device_count()
+    
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
@@ -266,6 +275,7 @@ def main_worker(gpu, ngpus_per_node, args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     args.gpu = gpu
     args.device = f'cuda:{args.gpu}' if args.gpu is not None else device
+
     
     # default filename
     if args.resume == '':
@@ -296,29 +306,66 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
+    print(args.distributed)
     if args.distributed:
+        #set_trace()
+        print('am i here?')
+        print(args.rank * ngpus_per_node + gpu)
         if args.dist_url == "env://" and args.rank == -1:
+            print("url?, i dont think so")
             args.rank = int(os.environ["RANK"])
         if args.multiprocessing_distributed:
+            print("I think here")
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
+            #set_trace()
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
+
+        print('rank',args.rank)
+        
    
-    # ----------------------------------------------
+    '''
+    moved this up to count images
+    clunky way to get numbers of images
+    '''
+
+    root_dir = Path(args.data)
+    train_dataset = ImageFolderInstanceSamples(root=root_dir/"train", 
+                                               n_samples=args.ipcl_n,
+                                               loader=open_image_array)
+        
+    val_dataset = ImageFolderInstanceSamples(root=root_dir/"val", 
+                                             n_samples=args.ipcl_n,
+                                             loader=open_image_array)
+
+    train_size = len(train_dataset)
+    val_size = len(val_dataset)
+    del train_dataset
+    del val_dataset
+
+    
+    
+        # ----------------------------------------------
     #  INIT IPCL MODEL
     # ----------------------------------------------
     
+
+    
+    '''
+    The original version
+    '''
     print("=> creating model '{}'".format(args.arch))
     model = IPCL(models.__dict__[args.arch](out_dim=args.ipcl_dim), 
-                 1281167, # number of imagenet images
+                 train_size, # number of imagenet images ORIGINAL is 1281167
                  K=args.ipcl_k, 
                  T=args.ipcl_t, 
                  out_dim=args.ipcl_dim, 
                  n_samples=args.ipcl_n)  
     print(model)
     
+  
     # ----------------------------------------------
     #  INIT OPTIMIZER
     # ----------------------------------------------
@@ -343,16 +390,19 @@ def main_worker(gpu, ngpus_per_node, args):
         
     print(optimizer)
     
+    
     # ----------------------------------------------
     #  DATA LOADERS
     # ----------------------------------------------
     
     # TRANSFORMS
+
     root_dir = Path(args.data)
     before_batch_train_tfrm, after_batch_train_trfm = get_transforms_custom(n_samples=args.ipcl_n)
     
     # DATALOADERS for IPCL training / validation    
     if args.distributed:
+        print('creating sampler?')
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
     else:
         train_sampler = None
@@ -369,8 +419,51 @@ def main_worker(gpu, ngpus_per_node, args):
                                              loader=open_image_array, 
                                              transform=before_batch_train_tfrm)
     
-    assert len(train_dataset) == 1281167, f"Oops, expected num train images = 1281167, got {len(train_dataset)}"
-    assert len(val_dataset) == 50000, f"Oops, expected num train images = 50000, got {len(val_dataset)}"
+    '''
+    The vlad version
+
+    creating model after loaders so it can calculate how many images are in the dataset
+    
+    print("=> creating model '{}'".format(args.arch))
+    model = IPCL(models.__dict__[args.arch](out_dim=args.ipcl_dim), 
+                 len(train_dataset), # number of imagenet images
+                 K=args.ipcl_k, 
+                 T=args.ipcl_t, 
+                 out_dim=args.ipcl_dim, 
+                 n_samples=args.ipcl_n)  
+    print(model)
+
+        # ----------------------------------------------
+    #  INIT OPTIMIZER
+    # ----------------------------------------------
+    
+    if args.opt == "SGD":
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum,
+                              weight_decay=args.wd)
+    elif args.opt == "MADGRAD":
+        optimizer = madgrad.MADGRAD(model.parameters(), lr=args.lr, momentum=args.momentum, 
+                                    weight_decay=args.wd, eps=1e-06)
+    elif args.opt == "madgrad_wd":
+        optimizer = madgrad_wd(model.parameters(), lr=args.lr, momentum=args.momentum, 
+                               weight_decay=args.wd, eps=1e-06)
+            
+    if args.use_lars:
+        #torchlars did not work with our gradient accumulation (batch multiplier) scheme
+        #from torchlars import LARS
+        #optimizer = LARS(optimizer=optimizer, eps=1e-8, trust_coef=0.001)
+        from utils import LARS
+        optimizer = LARS(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.momentum, eta=0.001)
+        
+        
+    print(optimizer)
+    '''
+
+    
+    #THIS IS UPDATED FOR SMALLER IMAGE SET
+    
+    assert len(train_dataset) == train_size, f"Oops, expected num train images = 1281167, got {len(train_dataset)}"
+    assert len(val_dataset) == val_size, f"Oops, expected num train images = 50000, got {len(val_dataset)}"
+    
     
     print(train_dataset)
     print(val_dataset)
@@ -462,12 +555,15 @@ def main_worker(gpu, ngpus_per_node, args):
     # ----------------------------------------------
     #  DISTRIBUTED TRAINING
     # ----------------------------------------------
+    print(args.distributed)
     
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
+        print('okay on my way')
         if args.gpu is not None:
+            print('about to put it on the distrubted')
             torch.cuda.set_device(args.gpu)
             model.cuda(args.gpu)
             model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -476,7 +572,9 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / ngpus_per_node)
             args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
+            print('figured out soem workers')
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            print('boom?')
         else:
             model.cuda()
             model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -491,8 +589,10 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         # AllGather implementation (batch shuffle, queue update, etc.) in
         # this code only supports DistributedDataParallel.
+        set_trace()
         raise NotImplementedError("Only DistributedDataParallel is supported.")
 
+    print("model on distributed i think")
     # ----------------------------------------------
     #  RESUME FROM CHECKPOINT
     # ----------------------------------------------
@@ -535,7 +635,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # ----------------------------------------------
     #  TRAIN
     # ----------------------------------------------        
-    
+    print('gonna train a model')
     train_model(model, 
                 optimizer, 
                 loaders, 

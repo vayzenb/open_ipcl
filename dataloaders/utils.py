@@ -4,7 +4,8 @@ import torch.nn as nn
 from torchvision import transforms as T
 import numpy as np
 from PIL import Image
-from turbojpeg import TurboJPEG, TJPF, TJSAMP
+#from turbojpeg import TurboJPEG, TJPF, TJSAMP
+from turbojpeg import TurboJPEG #VLAD edited this
 from urllib.request import urlopen
 import matplotlib.pyplot as plt
 import cv2
