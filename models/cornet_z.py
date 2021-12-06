@@ -24,10 +24,20 @@ class Identity(nn.Module):
     def forward(self, x):
         return x
 
+class Normalize(nn.Module):
+
+    def __init__(self, power=2):
+        super(Normalize, self).__init__()
+        self.power = power
+
+    def forward(self, x):
+        norm = x.pow(self.power).sum(1, keepdim=True).pow(1. / self.power)
+        out = x.div(norm)
+        return out
 
 class CORblock_Z(nn.Module):
 
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1,out_dim=128,l2norm=True):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size,
                               stride=stride, padding=kernel_size // 2)
@@ -50,7 +60,7 @@ or OFA -> FFA
 To make this compatible with the contrastive model, i also removed the output layer and changes the last FC to output 128
 '''
 
-def CORnet_Z():
+def CORnet_Z(out_dim=128):
     model = nn.Sequential(OrderedDict([
         ('V1', CORblock_Z(3, 64, kernel_size=7, stride=2)),
         ('V2', CORblock_Z(64, 128)),
@@ -60,7 +70,7 @@ def CORnet_Z():
         ('decoder', nn.Sequential(OrderedDict([
             ('avgpool', nn.AdaptiveAvgPool2d(1)),
             ('flatten', Flatten()),
-            ('linear', nn.Linear(1024, 128)),
+            ('linear', nn.Linear(1024, out_dim)),
             ('l2norm', Normalize())
         ])))
     ]))

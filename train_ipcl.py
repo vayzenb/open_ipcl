@@ -332,7 +332,7 @@ def main_worker(gpu, ngpus_per_node, args):
     '''
 
     root_dir = Path(args.data)
-    train_dataset = ImageFolderInstanceSamples(root=root_dir/"train", 
+    train_dataset = ImageFolderInstanceSamples(root=root_dir/"val", 
                                                n_samples=args.ipcl_n,
                                                loader=open_image_array)
         
@@ -355,7 +355,8 @@ def main_worker(gpu, ngpus_per_node, args):
     
     '''
     The original version
-    '''
+    '''    
+    
     print("=> creating model '{}'".format(args.arch))
     model = IPCL(models.__dict__[args.arch](out_dim=args.ipcl_dim), 
                  train_size, # number of imagenet images ORIGINAL is 1281167
@@ -363,7 +364,9 @@ def main_worker(gpu, ngpus_per_node, args):
                  T=args.ipcl_t, 
                  out_dim=args.ipcl_dim, 
                  n_samples=args.ipcl_n)  
+
     print(model)
+    
     
   
     # ----------------------------------------------
@@ -409,7 +412,7 @@ def main_worker(gpu, ngpus_per_node, args):
     
     # TODO: modify instance sampling to happen before collation (as a transform)
     # so that we don't have to use torch.cat to stack imgs (which creates a new copy, like slowing down)
-    train_dataset = ImageFolderInstanceSamples(root=root_dir/"train", 
+    train_dataset = ImageFolderInstanceSamples(root=root_dir/"val", 
                                                n_samples=args.ipcl_n,
                                                loader=open_image_array, 
                                                transform=before_batch_train_tfrm)
@@ -418,45 +421,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                              n_samples=args.ipcl_n,
                                              loader=open_image_array, 
                                              transform=before_batch_train_tfrm)
-    
-    '''
-    The vlad version
 
-    creating model after loaders so it can calculate how many images are in the dataset
-    
-    print("=> creating model '{}'".format(args.arch))
-    model = IPCL(models.__dict__[args.arch](out_dim=args.ipcl_dim), 
-                 len(train_dataset), # number of imagenet images
-                 K=args.ipcl_k, 
-                 T=args.ipcl_t, 
-                 out_dim=args.ipcl_dim, 
-                 n_samples=args.ipcl_n)  
-    print(model)
-
-        # ----------------------------------------------
-    #  INIT OPTIMIZER
-    # ----------------------------------------------
-    
-    if args.opt == "SGD":
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum,
-                              weight_decay=args.wd)
-    elif args.opt == "MADGRAD":
-        optimizer = madgrad.MADGRAD(model.parameters(), lr=args.lr, momentum=args.momentum, 
-                                    weight_decay=args.wd, eps=1e-06)
-    elif args.opt == "madgrad_wd":
-        optimizer = madgrad_wd(model.parameters(), lr=args.lr, momentum=args.momentum, 
-                               weight_decay=args.wd, eps=1e-06)
-            
-    if args.use_lars:
-        #torchlars did not work with our gradient accumulation (batch multiplier) scheme
-        #from torchlars import LARS
-        #optimizer = LARS(optimizer=optimizer, eps=1e-8, trust_coef=0.001)
-        from utils import LARS
-        optimizer = LARS(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.momentum, eta=0.001)
-        
-        
-    print(optimizer)
-    '''
 
     
     #THIS IS UPDATED FOR SMALLER IMAGE SET
@@ -497,7 +462,7 @@ def main_worker(gpu, ngpus_per_node, args):
     ])
         
     train_dataset = ImageFolderInstanceSamples(
-        root=root_dir/"train", n_samples=1, transform=knn_transform
+        root=root_dir/"val", n_samples=1, transform=knn_transform
     )
     print(train_dataset)
 
