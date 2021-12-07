@@ -309,13 +309,13 @@ def main_worker(gpu, ngpus_per_node, args):
     print(args.distributed)
     if args.distributed:
         #set_trace()
-        print('am i here?')
+        
         print(args.rank * ngpus_per_node + gpu)
         if args.dist_url == "env://" and args.rank == -1:
-            print("url?, i dont think so")
+            
             args.rank = int(os.environ["RANK"])
         if args.multiprocessing_distributed:
-            print("I think here")
+            
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             #set_trace()
@@ -323,7 +323,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-        print('rank',args.rank)
+        
         
    
     '''
@@ -687,6 +687,7 @@ def train_model(
             epoch_scheduler.step()
                 
         # save
+        '''Vlad commented this out temporarily
         if args.resume is not None:
             torch.save({
             'args': args if isinstance(args, dict) else vars(args),
@@ -700,7 +701,7 @@ def train_model(
             #'train_transform': train_loader.dataset.transform,
             #'val_transform': val_loader.dataset.transform,
           }, args.resume, _use_new_zipfile_serialization=False)
-
+            '''
     top1, top5 = run_kNN(learner.base_encoder, train_loader_knn, val_loader_knn, knn_device=args.device)
 
     print("=> all done!")
@@ -748,6 +749,7 @@ def train(epoch, learner, optimizer, train_loader, args, batch_multiplier=1.,
         if (iter_num+1) % batch_multiplier == 0:
             optimizer.step()
             optimizer.zero_grad()
+            
             
         # store embeddings for online knn monitoring
         # keep for only the first augmented instance

@@ -41,12 +41,14 @@ class CORblock_Z(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size,
                               stride=stride, padding=kernel_size // 2)
+        self.groupnorm = nn.GroupNorm(32, out_channels) #This is imported from open_cl alexnet_gn
         self.nonlin = nn.ReLU(inplace=True)
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.output = Identity()  # for an easy access to this block's output
 
     def forward(self, inp):
         x = self.conv(inp)
+        x = self.groupnorm(x)
         x = self.nonlin(x)
         x = self.pool(x)
         x = self.output(x)  # for an easy access to this block's output
