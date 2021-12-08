@@ -61,6 +61,8 @@ from dataloaders.dataloader import FastLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 from glob import glob
 
+weights_dir = '/lab_data/behrmannlab/vlad/ginn/model_weights'
+
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -279,6 +281,7 @@ def main_worker(gpu, ngpus_per_node, args):
     
     # default filename
     if args.resume == '':
+        
         filename = 'ipcl0_{}_{}_{}_lars{}_bs{}_bm_{}_ep{}_out{}_k{}_n{}_t{}_lr{}.pth.tar'.format(
             args.arch,
             args.opt,
@@ -687,8 +690,10 @@ def train_model(
             epoch_scheduler.step()
                 
         # save
-        '''Vlad commented this out temporarily
-        if args.resume is not None:
+        
+        if args.resume is not None and (epoch + 1)%25 == 0:
+            '''
+            #original version
             torch.save({
             'args': args if isinstance(args, dict) else vars(args),
             'epoch': epoch + 1,
@@ -700,8 +705,23 @@ def train_model(
             'perf_monitor': perf_monitor,
             #'train_transform': train_loader.dataset.transform,
             #'val_transform': val_loader.dataset.transform,
-          }, args.resume, _use_new_zipfile_serialization=False)
+            }, args.resume, _use_new_zipfile_serialization=False)
             '''
+          
+            #vlad version
+            torch.save({
+            'args': args if isinstance(args, dict) else vars(args),
+            'epoch': epoch + 1,
+            'state_dict': learner.state_dict(),
+            'optimizer' : optimizer.state_dict(),
+            'epoch_scheduler': epoch_scheduler.state_dict() if hasattr(epoch_scheduler, 'state_dict') else None,
+            'batch_scheduler': batch_scheduler.state_dict() if hasattr(batch_scheduler, 'state_dict') else None,
+            'top1': top1,
+            'perf_monitor': perf_monitor,
+            #'train_transform': train_loader.dataset.transform,
+            #'val_transform': val_loader.dataset.transform,
+            }, f'{weights_dir}/{args.arch}_cl_{epoch +1}.pth.tar', _use_new_zipfile_serialization=False)
+            
     top1, top5 = run_kNN(learner.base_encoder, train_loader_knn, val_loader_knn, knn_device=args.device)
 
     print("=> all done!")

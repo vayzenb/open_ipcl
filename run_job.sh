@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 # Job name
-#SBATCH --job-name=open_IPCL_resnet
+#SBATCH --job-name=open_IPCL_cornet
 # Mail events (NONE, BEGIN, END, FAIL, ALL)
 ###############################################
 ########## example #SBATCH --mail-type=END,FAIL 
@@ -22,10 +22,10 @@
 #SBATCH --time 3-00:00:00
 
 # Standard output and error log
-#SBATCH --output=slurm_out/resnet_cl.out
+#SBATCH --output=slurm_out/cornet_cl.out
 
 conda activate open_cl
 
-python train_ipcl.py -a resnet18 -b 64 --gpu 0 /lab_data/behrmannlab/image_sets/imagenet_objects
+python train_ipcl.py -a cornet_z -b 64 --gpu 0 /lab_data/behrmannlab/image_sets/imagenet_objects
 
 
