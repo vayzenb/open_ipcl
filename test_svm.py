@@ -1,6 +1,7 @@
 
 curr_dir = '/home/vayzenbe/GitHub_Repos/GiNN'
 
+import mmap
 import sys
 sys.path.insert(1, f'{curr_dir}/Models')
 
@@ -30,10 +31,13 @@ transform = transforms.Compose([
 
 
 stim_dir = "/lab_data/behrmannlab/image_sets/imagenet_objects/val"
+stim_dir = "/user_data/vayzenbe/GitHub_Repos/ginn/Stim/Object"
 exclude_im = f"/lab_data/behrmannlab/image_sets/imagenet_face_files.csv"
 exclude_folder = f"/lab_data/behrmannlab/image_sets/imagenet_animal_classes.csv"
 
 weights_dir = '/lab_data/behrmannlab/vlad/ginn/model_weights'
+model_arch = ['cornet_z']
+epochs = ['25', '50','75','100']
 
 def extract_acts(model, im):
     """
@@ -71,45 +75,45 @@ def model_loop(model, loader):
     
     return model_acts, all_label.numpy()
 
-model = models.cornet_z()
+
+for mm in model_arch:
+    for ee in epochs:
+            
+        #the values here are arbitrary just to load the model
+        model = IPCL(models.__dict__[mm](out_dim=128), 
+                        500, # number of imagenet images ORIGINAL is 1281167
+                        K=4096, 
+                        T=0.07, 
+                        out_dim=128, 
+                        n_samples=5)  
+
+        #print(model)
 
 
-#the values here are arbitrary just to load the model
-model = IPCL(models.__dict__['cornet_z'](out_dim=128), 
-                500, # number of imagenet images ORIGINAL is 1281167
-                K=4096, 
-                T=0.07, 
-                out_dim=128, 
-                n_samples=5)  
-
-print(model)
+        checkpoint = torch.load(f'{weights_dir}/{mm}_cl_{ee}.pth.tar')
+        model.load_state_dict(checkpoint['state_dict'])
 
 
-checkpoint = torch.load(f'{weights_dir}/cornet_z_cl_15.pth.tar')
-model.load_state_dict(checkpoint['state_dict'])
+        model = model.base_encoder
+
+        model = model.cuda()
 
 
-model = model.base_encoder
+        dataset = load_without_faces.load_stim(stim_dir, exclude_im, exclude_folder, transform=transform)
 
-model = model.cuda()
+        loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False,num_workers = 4, pin_memory=True)
 
+        output, label = model_loop(model, loader)
 
-dataset = load_without_faces.load_stim(stim_dir, exclude_im, exclude_folder, transform=transform)
+        print('starting SVM')
+        #do SVM
+        sss = StratifiedShuffleSplit(n_splits=3,test_size=0.2)
 
-loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False,num_workers = 4, pin_memory=True)
-
-output, label = model_loop(model, loader)
-
-print('starting SVM')
-#do SVM
-sss = StratifiedShuffleSplit(n_splits=1,test_size=0.2)
-
-for train_index, test_index in sss.split(output, label):
-        
-    X_train, X_test = output[train_index], output[test_index]
-    y_train, y_test = label[train_index], label[test_index]
-    
-    clf = svm.SVC(kernel='linear', C=1).fit(X_train, y_train)
-    currScore = clf.score(X_test, y_test)
-    print(currScore)
-pdb.set_trace()
+        for train_index, test_index in sss.split(output, label):
+                
+            X_train, X_test = output[train_index], output[test_index]
+            y_train, y_test = label[train_index], label[test_index]
+            
+            clf = svm.SVC(kernel='linear', C=1).fit(X_train, y_train)
+            currScore = clf.score(X_test, y_test)
+            print(mm,ee ,currScore)
